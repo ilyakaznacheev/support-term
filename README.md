@@ -10,6 +10,8 @@ Simplistic microservice landscape to implement CLI user support system
 - [ ] Configs
 - [ ] Tests
 - [ ] Logging microservice
+- [ ] Message ID generation microservice
+- [ ] Monitoring microservice
 
 ## Requirements
 
