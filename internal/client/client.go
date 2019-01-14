@@ -1,6 +1,10 @@
 package client
 
 import (
+	"strings"
+	"time"
+
+	// "log"
 	"bufio"
 	"fmt"
 	"os"
@@ -19,39 +23,35 @@ func Run() error {
 	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
 	defer ec.Close()
 
-	questionCh := make(chan *types.Question, 1)
-	ec.BindSendChan("question", questionCh)
-
-	answerCh := make(chan *types.Answer)
-	ec.BindRecvChan("answer", answerCh)
-
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("Enter your name")
 	name, _ := reader.ReadString('\n')
+	name = strings.TrimSpace(name)
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+	go func() {
+		<-interrupt
+		ec.Close()
+		fmt.Println("Good luck, " + name)
+	}()
 
 	for {
 		fmt.Println("Enter your question")
 
 		question, _ := reader.ReadString('\n')
-		msg := types.Question{
-			ID:       123,
+		msg := &types.Question{
+			ID:       123, //RequestID(ec, "client-"+name),
 			UserName: name,
-			Text:     question,
+			Text:     strings.TrimSpace(question),
 		}
 
-		questionCh <- &msg
-
-		select {
-		case answer := <-answerCh:
-			fmt.Printf("%s: %s\n", answer.SupName, answer.Text)
-
-		case <-interrupt:
-			fmt.Println("Good luck, " + name)
-			return nil
+		resp := &types.Answer{}
+		err := ec.Request("question", msg, resp, time.Minute)
+		if err != nil {
+			return err
 		}
+		fmt.Printf("%s: %s\n", resp.SupName, resp.Text)
 	}
 }

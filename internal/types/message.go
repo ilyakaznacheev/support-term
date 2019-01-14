@@ -13,3 +13,8 @@ type Answer struct {
 	SupName string
 	Text    string
 }
+
+// NextID generated ID for unique sender
+type NextID struct {
+	GeneratedID int64
+}

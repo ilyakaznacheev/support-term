@@ -6,10 +6,16 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/ilyakaznacheev/support-term/internal/types"
 	nats "github.com/nats-io/go-nats"
 )
+
+type request struct {
+	reply string
+	msg   *types.Question
+}
 
 // Run start a CLI terminal for support users
 func Run() error {
@@ -18,13 +24,12 @@ func Run() error {
 		return err
 	}
 	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
-	defer ec.Close()
+	defer func() {
+		ec.Flush()
+		ec.Close()
+	}()
 
-	questionCh := make(chan *types.Question)
-	ec.BindRecvChan("question", questionCh)
-
-	answerCh := make(chan *types.Answer, 1)
-	ec.BindSendChan("answer", answerCh)
+	questionCh := make(chan request)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -33,23 +38,36 @@ func Run() error {
 
 	fmt.Println("Enter your name")
 	name, _ := reader.ReadString('\n')
+	name = strings.TrimSpace(name)
 	fmt.Println("Work hard, " + name)
+
+	ec.Subscribe("question", func(subject, reply string, msg *types.Question) {
+		questionCh <- request{
+			reply: reply,
+			msg:   msg,
+		}
+	})
+	if err != nil {
+		return err
+	}
 
 	for {
 		select {
 		case msg := <-questionCh:
-			fmt.Printf("%s: %s\nAnswer: ", msg.UserName, msg.Text)
+			fmt.Printf("%s: %s\nAnswer: ", msg.msg.UserName, msg.msg.Text)
 			text, _ := reader.ReadString('\n')
-			answer := types.Answer{
-				ID:      msg.ID,
+			answer := &types.Answer{
+				ID:      msg.msg.ID,
 				SupName: name,
-				Text:    text,
+				Text:    strings.TrimSpace(text),
 			}
-			answerCh <- &answer
+
+			ec.Publish(msg.reply, answer)
 
 		case <-interrupt:
 			fmt.Println("Good job, " + name)
 			return nil
 		}
 	}
+
 }
