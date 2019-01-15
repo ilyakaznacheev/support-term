@@ -15,41 +15,44 @@ import (
 )
 
 type client struct {
-	name   string
-	ec     *nats.EncodedConn
-	in     io.Reader
-	out    io.Writer
-	ctx    context.Context
-	cancel context.CancelFunc
+	name      string
+	ec        *nats.EncodedConn
+	in        io.Reader
+	out       io.Writer
+	ctx       context.Context
+	cancel    context.CancelFunc
+	interrupt chan os.Signal
 }
 
 // NewClient create client app
 func newClient(nc *nats.Conn, name string, in io.Reader, out io.Writer) *client {
 	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
-	ctx, cancel := context.WithCancel(context.Background())
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+
 	c := &client{
-		name:   name,
-		ec:     ec,
-		in:     in,
-		out:    out,
-		ctx:    ctx,
-		cancel: cancel,
+		name:      name,
+		ec:        ec,
+		in:        in,
+		out:       out,
+		interrupt: interrupt,
 	}
-	c.handleInterrupt()
 
 	return c
 }
 
-func (c *client) handleInterrupt() {
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+func (c *client) refreshContext() {
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	go func() {
-		<-interrupt
+		<-c.interrupt
 		c.cancel()
 	}()
 }
 
 func (c *client) runMessageLoop() error {
+	c.refreshContext()
+
 	reader := bufio.NewReader(c.in)
 
 	for {
