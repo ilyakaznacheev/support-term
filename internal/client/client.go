@@ -1,6 +1,7 @@
 package client
 
 import (
+	"runtime"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ func Run() error {
 		<-interrupt
 		ec.Close()
 		fmt.Println("Good luck, " + name)
+		runtime.Goexit()
 	}()
 
 	for {
@@ -42,7 +44,7 @@ func Run() error {
 
 		question, _ := reader.ReadString('\n')
 		msg := &types.Question{
-			ID:       123, //RequestID(ec, "client-"+name),
+			ID:       RequestID(ec),
 			UserName: name,
 			Text:     strings.TrimSpace(question),
 		}
@@ -54,4 +56,15 @@ func Run() error {
 		}
 		fmt.Printf("%s: %s\n", resp.SupName, resp.Text)
 	}
+}
+
+// RequestID sent request for a new ID
+func RequestID(ec *nats.EncodedConn) int64 {
+	resp := &types.NextID{}
+	err := ec.Request("id-request", nil, resp, time.Minute)
+	if err != nil {
+		return 0
+	}
+
+	return resp.GeneratedID
 }
