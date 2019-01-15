@@ -3,7 +3,9 @@ package support
 
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,57 +19,83 @@ type request struct {
 	msg   *types.Question
 }
 
+type support struct {
+	name      string
+	ec        *nats.EncodedConn
+	in        io.Reader
+	out       io.Writer
+	ctx       context.Context
+	cancel    context.CancelFunc
+	interrupt chan os.Signal
+}
+
+func newSupport(nc *nats.Conn, name string, in io.Reader, out io.Writer) *support {
+	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+
+	s := &support{
+		name:      name,
+		ec:        ec,
+		in:        in,
+		out:       out,
+		interrupt: interrupt,
+	}
+
+	return s
+}
+
+func (s *support) runMessageLoop() error {
+	questionCh := make(chan request)
+
+	reader := bufio.NewReader(s.in)
+
+	s.ec.Subscribe("question", func(subject, reply string, msg *types.Question) {
+		questionCh <- request{
+			reply: reply,
+			msg:   msg,
+		}
+	})
+
+	for {
+		select {
+		case msg := <-questionCh:
+			fmt.Fprintf(s.out, "%s: %s\nAnswer: ", msg.msg.UserName, msg.msg.Text)
+			text, _ := reader.ReadString('\n')
+
+			answer := &types.Answer{
+				ID:      msg.msg.ID,
+				SupName: s.name,
+				Text:    strings.TrimSpace(text),
+			}
+
+			s.ec.Publish(msg.reply, answer)
+
+		case <-s.interrupt:
+			fmt.Fprintf(s.out, "Good job, "+s.name)
+			s.ec.Flush()
+			return nil
+		}
+	}
+}
+
 // Run start a CLI terminal for support users
 func Run() error {
 	nc, err := nats.Connect(nats.DefaultURL)
 	if err != nil {
 		return err
 	}
-	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
 	defer func() {
-		ec.Flush()
-		ec.Close()
+		nc.Close()
 	}()
 
-	questionCh := make(chan request)
-
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-
-	reader := bufio.NewReader(os.Stdin)
-
 	fmt.Println("Enter your name")
-	name, _ := reader.ReadString('\n')
+	name, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	name = strings.TrimSpace(name)
 	fmt.Println("Work hard, " + name)
 
-	ec.Subscribe("question", func(subject, reply string, msg *types.Question) {
-		questionCh <- request{
-			reply: reply,
-			msg:   msg,
-		}
-	})
-	if err != nil {
-		return err
-	}
+	sp := newSupport(nc, strings.TrimSpace(name), os.Stdin, os.Stdout)
 
-	for {
-		select {
-		case msg := <-questionCh:
-			fmt.Printf("%s: %s\nAnswer: ", msg.msg.UserName, msg.msg.Text)
-			text, _ := reader.ReadString('\n')
-			answer := &types.Answer{
-				ID:      msg.msg.ID,
-				SupName: name,
-				Text:    strings.TrimSpace(text),
-			}
-
-			ec.Publish(msg.reply, answer)
-
-		case <-interrupt:
-			fmt.Println("Good job, " + name)
-			return nil
-		}
-	}
-
+	return sp.runMessageLoop()
 }

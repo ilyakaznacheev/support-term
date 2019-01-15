@@ -12,6 +12,7 @@ Simplistic microservice landscape to implement CLI user support system
 - [ ] Logging microservice
 - [X] Message ID generation microservice
 - [ ] Monitoring microservice
+- [ ] Protobuf encoding
 
 ## Requirements
 
