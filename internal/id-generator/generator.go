@@ -6,8 +6,9 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/ilyakaznacheev/support-term/internal/types"
+	"github.com/ilyakaznacheev/support-term/internal/pkg/message"
 	nats "github.com/nats-io/go-nats"
+	"github.com/nats-io/go-nats/encoders/protobuf"
 )
 
 var currentID int64
@@ -18,7 +19,7 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+	ec, _ := nats.NewEncodedConn(nc, protobuf.PROTOBUF_ENCODER)
 	defer ec.Close()
 
 	interrupt := make(chan os.Signal, 1)
@@ -27,7 +28,7 @@ func Run() error {
 	log.Println("Starting ID Generator")
 
 	ec.Subscribe("id-request", func(subject, reply string, msg interface{}) {
-		newID := &types.NextID{
+		newID := &message.NextID{
 			GeneratedID: nextID(),
 		}
 		log.Printf("Generated id: %d\n", newID.GeneratedID)

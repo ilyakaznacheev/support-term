@@ -10,13 +10,14 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/ilyakaznacheev/support-term/internal/types"
+	"github.com/ilyakaznacheev/support-term/internal/pkg/message"
 	nats "github.com/nats-io/go-nats"
+	"github.com/nats-io/go-nats/encoders/protobuf"
 )
 
 type request struct {
 	reply string
-	msg   *types.Question
+	msg   *message.Question
 }
 
 type support struct {
@@ -30,7 +31,7 @@ type support struct {
 }
 
 func newSupport(nc *nats.Conn, name string, in io.Reader, out io.Writer) *support {
-	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+	ec, _ := nats.NewEncodedConn(nc, protobuf.PROTOBUF_ENCODER)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -51,7 +52,7 @@ func (s *support) runMessageLoop() error {
 
 	reader := bufio.NewReader(s.in)
 
-	s.ec.Subscribe("question", func(subject, reply string, msg *types.Question) {
+	s.ec.Subscribe("question", func(subject, reply string, msg *message.Question) {
 		questionCh <- request{
 			reply: reply,
 			msg:   msg,
@@ -64,7 +65,7 @@ func (s *support) runMessageLoop() error {
 			fmt.Fprintf(s.out, "%s: %s\nAnswer: ", msg.msg.UserName, msg.msg.Text)
 			text, _ := reader.ReadString('\n')
 
-			answer := &types.Answer{
+			answer := &message.Answer{
 				ID:      msg.msg.ID,
 				SupName: s.name,
 				Text:    strings.TrimSpace(text),

@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ilyakaznacheev/support-term/internal/types"
+	"github.com/ilyakaznacheev/support-term/internal/pkg/message"
 	nats "github.com/nats-io/go-nats"
+	"github.com/nats-io/go-nats/encoders/protobuf"
 )
 
 type client struct {
@@ -26,7 +27,7 @@ type client struct {
 
 // NewClient create client app
 func newClient(nc *nats.Conn, name string, in io.Reader, out io.Writer) *client {
-	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+	ec, _ := nats.NewEncodedConn(nc, protobuf.PROTOBUF_ENCODER)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -60,13 +61,13 @@ func (c *client) runMessageLoop() error {
 		fmt.Fprintln(c.out, "Enter your question")
 
 		question, _ := reader.ReadString('\n')
-		msg := &types.Question{
+		msg := &message.Question{
 			ID:       c.requestID(),
 			UserName: c.name,
 			Text:     strings.TrimSpace(question),
 		}
 
-		resp := &types.Answer{}
+		resp := &message.Answer{}
 		err := c.ec.Request("question", msg, resp, time.Minute)
 		if err != nil {
 			return err
@@ -83,7 +84,7 @@ func (c *client) runMessageLoop() error {
 }
 
 func (c *client) requestID() int64 {
-	resp := &types.NextID{}
+	resp := &message.NextID{}
 	err := c.ec.Request("id-request", nil, resp, time.Minute)
 	if err != nil {
 		return 0

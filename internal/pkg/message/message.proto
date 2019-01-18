@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+// protoc --go_out=. *.proto
+
+package message;
+
+message Question {
+    int64  ID = 1; 
+	string UserName = 2; 
+	string Text  = 3;
+}
+
+message Answer {
+    int64  ID = 1; 
+	string SupName = 2; 
+	string Text  = 3;
+}
+
+message NextID {
+    int64  GeneratedID = 1; 
+}
