@@ -6,7 +6,7 @@ Simplistic microservice landscape to implement CLI user support system
 
 - [X] Client terminal
 - [X] Support manager terminal
-- [ ] Question queueing and distribution
+- [X] Question queueing and distribution
 - [ ] Configs
 - [ ] Tests
 - [ ] Logging microservice

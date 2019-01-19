@@ -52,7 +52,7 @@ func (s *support) runMessageLoop() error {
 
 	reader := bufio.NewReader(s.in)
 
-	s.ec.Subscribe("question", func(subject, reply string, msg *message.Question) {
+	s.ec.QueueSubscribe("question", "support", func(subject, reply string, msg *message.Question) {
 		questionCh <- request{
 			reply: reply,
 			msg:   msg,
